@@ -1,0 +1,6 @@
+KO_DOCKER_REPO="${IMAGE_REPO}" ko resolve \
+  --base-import-paths \
+  --filename deploy/ \
+  --recursive \
+  --tags "${TAG}" \
+  --platform "${PLATFORM}" > "${TMPDIR}/release.yaml"
