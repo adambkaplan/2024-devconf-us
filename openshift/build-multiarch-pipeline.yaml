@@ -1,0 +1,111 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: build-multiarch
+spec:
+  params:
+  - default: https://github.com/redhat-openshift-builds/shipwright-io-build
+    name: GIT_REPO
+    type: string
+  - default: builds-1.1
+    name: GIT_REVISION
+    type: string
+  - default: image-registry.openshift-image-registry.svc:5000/devconf-us/build-multiarch
+    name: IMAGE_NAME
+    type: string
+  - default: .
+    name: PATH_CONTEXT
+    type: string
+  - default: .konflux/controller/Dockerfile
+    name: DOCKERFILE
+    type: string
+  tasks:
+  - name: fetch-repository
+    params:
+    - name: url
+      value: $(params.GIT_REPO)
+    - name: revision
+      value: $(params.GIT_REVISION)
+    - name: subdirectory
+      value: ""
+    - name: deleteExisting
+      value: "true"
+    taskRef:
+      kind: ClusterTask
+      name: git-clone
+    workspaces:
+    - name: output
+      workspace: workspace
+  - name: build-amd64
+    params:
+    - name: IMAGE
+      value: $(params.IMAGE_NAME):amd64
+    - name: TLSVERIFY
+      value: "false"
+    - name: CONTEXT
+      value: $(params.PATH_CONTEXT)
+    - name: DOCKERFILE
+      value: $(params.DOCKERFILE)
+    - name: STORAGE_DRIVER
+      value: ""
+    runAfter:
+    - fetch-repository
+    taskRef:
+      kind: ClusterTask
+      name: buildah
+    workspaces:
+    - name: source
+      workspace: workspace
+  - name: build-arm64
+    params:
+    - name: IMAGE
+      value: $(params.IMAGE_NAME):arm64
+    - name: BUILDER_IMAGE
+      value: registry.redhat.io/rhel8/buildah@sha256:aac6629389db17e99894c5bee0da01d4c8065d11d8c6f6e1602f9484290baa70
+    - name: STORAGE_DRIVER
+      value: ""
+    - name: DOCKERFILE
+      value: $(params.DOCKERFILE)
+    - name: CONTEXT
+      value: .
+    - name: TLSVERIFY
+      value: "true"
+    - name: FORMAT
+      value: oci
+    - name: BUILD_EXTRA_ARGS
+      value: ""
+    - name: PUSH_EXTRA_ARGS
+      value: ""
+    - name: SKIP_PUSH
+      value: "false"
+    runAfter:
+    - fetch-repository
+    taskRef:
+      kind: ClusterTask
+      name: buildah
+    workspaces:
+    - name: source
+      workspace: workspace
+  - name: build-manifest-list
+    runAfter:
+    - build-amd64
+    - build-arm64
+    taskRef:
+      kind: Task
+      name: buildah-manifest
+    params:
+    - name: IMAGE
+      value: $(params.IMAGE_NAME)
+    - name: IMAGE_AMD64
+      value: $(tasks.build-amd64.results.IMAGE_URL)
+    - name: IMAGE_ARM64
+      value: $(tasks.build-arm64.results.IMAGE_URL)
+  results:
+  - description: Digest of the manifest list built.
+    name: MANIFEST_DIGEST
+    value: $(tasks.build-manifest-list.results.IMAGE_DIGEST)
+  - description: Image repository where manifest list was pushed.
+    name: MANIFEST_URL
+    value: $(tasks.build-manifest-list.results.IMAGE_URL)
+  workspaces:
+  - name: workspace
