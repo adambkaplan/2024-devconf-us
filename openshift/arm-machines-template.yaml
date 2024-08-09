@@ -3,7 +3,7 @@ kind: MachineSet
 metadata:
   labels:
     machine.openshift.io/cluster-api-cluster: $INFRA_ID 
-  name: $INFRA_ID-arm64-machine-set
+  name: $INFRA_ID-$MACHINE_ROLE-arm64-$AWS_AZ
   namespace: openshift-machine-api
 spec:
   replicas: 1
