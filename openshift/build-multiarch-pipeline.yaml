@@ -4,19 +4,21 @@ metadata:
   name: build-multiarch
 spec:
   params:
-  - default: https://github.com/redhat-openshift-builds/shipwright-io-build
-    name: GIT_REPO
+  - name: GIT_REPO
     type: string
-  - default: builds-1.1
+  - default: main
     name: GIT_REVISION
     type: string
-  - default: image-registry.openshift-image-registry.svc:5000/devconf-us/build-multiarch
-    name: IMAGE_NAME
+  - default: build-multiarch
+    name: IMAGESTREAM_NAME
+    type: string
+  - default: latest
+    name: IMAGESTREAM_TAG
     type: string
   - default: .
     name: PATH_CONTEXT
     type: string
-  - default: .konflux/controller/Dockerfile
+  - default: ./Dockerfile
     name: DOCKERFILE
     type: string
   tasks:
@@ -39,15 +41,13 @@ spec:
   - name: build-amd64
     params:
     - name: IMAGE
-      value: $(params.IMAGE_NAME):amd64
+      value: image-registry.openshift-image-registry.svc:5000/$(context.taskRun.namespace)/$(params.IMAGESTREAM_NAME):$(params.IMAGESTREAM_TAG)-amd64
     - name: TLSVERIFY
-      value: "false"
+      value: "true"
     - name: CONTEXT
       value: $(params.PATH_CONTEXT)
     - name: DOCKERFILE
       value: $(params.DOCKERFILE)
-    - name: STORAGE_DRIVER
-      value: ""
     runAfter:
     - fetch-repository
     taskRef:
@@ -59,25 +59,13 @@ spec:
   - name: build-arm64
     params:
     - name: IMAGE
-      value: $(params.IMAGE_NAME):arm64
-    - name: BUILDER_IMAGE
-      value: registry.redhat.io/rhel8/buildah@sha256:aac6629389db17e99894c5bee0da01d4c8065d11d8c6f6e1602f9484290baa70
-    - name: STORAGE_DRIVER
-      value: ""
+      value: image-registry.openshift-image-registry.svc:5000/$(context.taskRun.namespace)/$(params.IMAGESTREAM_NAME):$(params.IMAGESTREAM_TAG)-arm64
+    - name: TLSVERIFY
+      value: "true"
     - name: DOCKERFILE
       value: $(params.DOCKERFILE)
     - name: CONTEXT
-      value: .
-    - name: TLSVERIFY
-      value: "true"
-    - name: FORMAT
-      value: oci
-    - name: BUILD_EXTRA_ARGS
-      value: ""
-    - name: PUSH_EXTRA_ARGS
-      value: ""
-    - name: SKIP_PUSH
-      value: "false"
+      value: $(params.PATH_CONTEXT)
     runAfter:
     - fetch-repository
     taskRef:
@@ -95,7 +83,7 @@ spec:
       name: buildah-manifest
     params:
     - name: IMAGE
-      value: $(params.IMAGE_NAME)
+      value: image-registry.openshift-image-registry.svc:5000/$(context.taskRun.namespace)/$(params.IMAGESTREAM_NAME):$(params.IMAGESTREAM_TAG)
     - name: IMAGE_AMD64
       value: $(tasks.build-amd64.results.IMAGE_URL)
     - name: IMAGE_ARM64

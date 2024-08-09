@@ -28,6 +28,10 @@ spec:
     description: Extra parameters passed for the push command when pushing images.
     name: PUSH_EXTRA_ARGS
     type: string
+  - default: ""
+    description: Extra parameters passed when creating and adding to the manifest list.
+    name: MANIFEST_EXTRA_ARGS
+    type: string
   - default: "false"
     description: Skip pushing the built image
     name: SKIP_PUSH
@@ -50,6 +54,7 @@ spec:
       # For demo purposes, force arch value
       echo "Adding amd64 image to manifest list" 
       buildah manifest add $(params.IMAGE) $(params.IMAGE_AMD64) \
+        $(params.MANIFEST_EXTRA_ARGS) \
         --arch=amd64 \
         --tls-verify=$(params.TLSVERIFY)
       echo "Adding arm64 image to manifest list"
