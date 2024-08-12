@@ -1,0 +1,107 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: buildah-manifest
+spec:
+  description: |-
+    Buildah manifest task assembles manifest lists for multi-arch iages.
+  params:
+  - description: Reference of the manifest list buildah will produce.
+    name: IMAGE
+    type: string
+  - default: registry.redhat.io/rhel8/buildah@sha256:aac6629389db17e99894c5bee0da01d4c8065d11d8c6f6e1602f9484290baa70
+    description: The location of the buildah builder image.
+    name: BUILDER_IMAGE
+    type: string
+  - description: AMD64 image to add to the manifest list
+    name: IMAGE_AMD64
+    type: string
+  - description: ARM64 image to add to the manifest list
+    name: IMAGE_ARM64
+    type: string
+  - default: "true"
+    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS
+      registry)
+    name: TLSVERIFY
+    type: string
+  - default: ""
+    description: Extra parameters passed for the push command when pushing images.
+    name: PUSH_EXTRA_ARGS
+    type: string
+  - default: ""
+    description: Extra parameters passed when creating and adding to the manifest list.
+    name: MANIFEST_EXTRA_ARGS
+    type: string
+  - default: "false"
+    description: Skip pushing the built image
+    name: SKIP_PUSH
+    type: string
+  results:
+  - description: Digest of the image just built.
+    name: IMAGE_DIGEST
+    type: string
+  - description: Image repository where the built image would be pushed to
+    name: IMAGE_URL
+    type: string
+  steps:
+  - image: $(params.BUILDER_IMAGE)
+    name: manifest-assemble
+    resources: {}
+    script: |
+      echo "Creating manifest list $(params.IMAGE)"
+      buildah manifest create $(params.IMAGE)
+
+      # For demo purposes, force arch value
+      echo "Adding amd64 image to manifest list" 
+      buildah manifest add $(params.IMAGE) $(params.IMAGE_AMD64) \
+        $(params.MANIFEST_EXTRA_ARGS) \
+        --arch=amd64 \
+        --tls-verify=$(params.TLSVERIFY)
+      echo "Adding arm64 image to manifest list"
+      buildah manifest add $(params.IMAGE) $(params.IMAGE_ARM64) \
+        --arch=arm64 \
+        --tls-verify=$(params.TLSVERIFY)
+
+      [[ "$(params.SKIP_PUSH)" == "true" ]] && echo "Push skipped" && exit 0
+
+      if [[ "$(workspaces.dockerconfig.bound)" == "true" ]]; then
+
+        # if config.json exists at workspace root, we use that
+        if test -f "$(workspaces.dockerconfig.path)/config.json"; then
+          export REGISTRY_AUTH_FILE="$(workspaces.dockerconfig.path)"
+
+        # else we look for .dockerconfigjson at the root
+        elif test -f "$(workspaces.dockerconfig.path)/.dockerconfigjson"; then
+          cp "$(workspaces.dockerconfig.path)/.dockerconfigjson" "$HOME/.docker/config.json"
+          export REGISTRY_AUTH_FILE="$HOME/.docker"
+
+        # need to error out if neither files are present
+        else
+          echo "neither 'config.json' nor '.dockerconfigjson' found at workspace root"
+          exit 1
+        fi
+      fi
+
+      echo "Pushing manifest list $(params.IMAGE)"
+      buildah manifest push \
+        $(params.PUSH_EXTRA_ARGS) --tls-verify=$(params.TLSVERIFY) \
+        --digestfile /tmp/image-digest $(params.IMAGE) \
+        docker://$(params.IMAGE)
+      cat /tmp/image-digest | tee $(results.IMAGE_DIGEST.path)
+      echo -n "$(params.IMAGE)" | tee $(results.IMAGE_URL.path)
+    securityContext:
+      capabilities:
+        add:
+        - SETFCAP
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+  volumes:
+  - emptyDir: {}
+    name: varlibcontainers
+  workspaces:
+  - description: An optional workspace that allows providing a .docker/config.json
+      file for Buildah to access the container registry. The file should be placed
+      at the root of the Workspace with name config.json or .dockerconfigjson.
+    name: dockerconfig
+    optional: true
