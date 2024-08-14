@@ -1,19 +1,19 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: build-multiarch-
+  generateName: sample-go-multiarch-
 spec:
   params:
   - name: GIT_REPO
-    value: https://github.com/shipwright-io/sample-go
+    value: https://github.com/adambkaplan/sample-go-multiarch
+  - name: GIT_REVISION
+    value: main
   - name: IMAGESTREAM_NAME
-    value: build-multiarch
+    value: sample-go-multiarch
   - name: IMAGESTREAM_TAG
     value: demo
-  - name: PATH_CONTEXT
-    value: docker-build
   - name: DOCKERFILE
-    value: ./Dockerfile
+    value: ./Containerfile
   pipelineRef:
     name: build-multiarch
   taskRunSpecs:
